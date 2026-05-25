@@ -1,0 +1,95 @@
+Konu: LLM Tabanlı Mobil Manipülasyon Robotu – Kavrama Modülü Durum Raporu
+
+Merhaba Hocam,
+
+Aşağıda arm_controller modülünde denenen yöntemleri, karşılaşılan sorunları ve
+mevcut durumu "sebep – geçici çözüm – kalıcı adım" formatında özetledim.
+
+─────────────────────────────────────────────────────────────────────────────
+GENEL DURUM
+─────────────────────────────────────────────────────────────────────────────
+
+Uçtan uca pipeline aktif ve çalışıyor:
+  LLM → Scanner → Navigator → Arm Controller
+
+Robot nesneye 0.67m mesafede duruyor (ARRIVED), kol REACH_JOINTS pozisyonuna
+geliyor, gripper açılıyor. Sorun bu noktadan sonra nesneye ulaşma aşamasında.
+
+─────────────────────────────────────────────────────────────────────────────
+DENENEN YÖNTEM 1 — Visual Servoing (Depth Image)
+─────────────────────────────────────────────────────────────────────────────
+
+Sebep      : /detection topic'inden gelen cx, cy piksel koordinatları ve
+             /depth/image topic'inden alınan derinlik değeri kullanılarak
+             shoulder_lift + wrist_1 eklemleri visual servoing ile kontrol
+             edildi. Nesneye yaklaştıkça derinlik azalacak, threshold'a
+             ulaşınca gripper kapanacaktı.
+
+Sonuç      : Çalışmadı. /depth/image topic'indeki tüm değerler NaN (0x7F800000)
+             dönüyor. Gazebo simülasyonunda RealSense D435 eklentisi geçerli
+             depth verisi üretemiyor. Yakın mesafede (<0.4m) kamera tamamen
+             körleşiyor.
+
+─────────────────────────────────────────────────────────────────────────────
+DENENEN YÖNTEM 2 — TF + PointCloud2 + 2-Joint IK
+─────────────────────────────────────────────────────────────────────────────
+
+Sebep      : Depth image NaN olduğu için alternatif olarak PointCloud2 verisi
+             denendi. Plan şuydu:
+             1. /points topic'inden cx,cy pikselindeki 3D koordinatı al
+             2. tf2 ile camera_0_color_optical_frame → arm_0_base_link
+                dönüşümü yap
+             3. Sadece shoulder_lift + wrist_1 için analitik IK hesapla
+             4. Arm'ı tek komutla hedefe gönder
+
+             TF namespace sorunu çözüldü:
+             - arm_controller node'u /a200_0000 namespace'ine taşındı
+             - topic remap: /tf → /a200_0000/tf, /tf_static → /a200_0000/tf_static
+             - arm_0_base_link → camera_0_color_optical_frame dönüşümü
+               doğrulandı: Translation [0.487, 0.168, 0.868]
+
+Sonuç      : Çalışmadı. /a200_0000/sensors/camera_0/points topic'i de NaN
+             dönüyor. PointCloud2 verisi depth image ile aynı kaynaktan
+             üretildiği için sorun devam ediyor.
+
+─────────────────────────────────────────────────────────────────────────────
+TEMEL SORUN — Gazebo Kamera Eklentisi
+─────────────────────────────────────────────────────────────────────────────
+
+Sebep      : Gazebo simülasyonunda kullanılan kamera eklentisi geçerli depth
+             verisi üretemiyor. /depth/image ve /points topic'lerindeki tüm
+             piksel değerleri IEEE 754 NaN formatında geliyor.
+             Color image (/color/image) çalışıyor, YOLO detection aktif.
+             Sorun sadece depth/3D veri üretiminde.
+
+Geçici çözüm: Şu an color image üzerinden YOLO ile cx,cy alınıyor, arm
+              REACH_JOINTS pozisyonuna geliyor ve ALIGNING aşamasında
+              wrist_1 ile dikey hizalama yapılıyor. Ancak 3D konum
+              bilinmediği için arm nesneye ulaşamıyor.
+
+Kalıcı adım : Gazebo'da depth kamera eklentisinin düzgün çalışması için
+              URDF/xacro dosyasındaki kamera tanımının güncellenmesi gerekiyor.
+              Hangi eklentinin (libgazebo_ros_camera, libgazebo_ros_depth_camera,
+              openni_kinect) kullanılması gerektiği konusunda yönlendirme
+              bekliyoruz.
+
+─────────────────────────────────────────────────────────────────────────────
+MEVCUT KOD MİMARİSİ
+─────────────────────────────────────────────────────────────────────────────
+
+arm_controller.py şu anda TF + IK altyapısı hazır:
+  - tf2_ros Buffer + TransformListener aktif
+  - ArmHelper.point_from_cloud() → piksel → 3D nokta
+  - ArmHelper.transform_point()  → kamera frame → arm frame
+  - ArmHelper.ik_2joint()        → shoulder_lift + wrist_1 IK
+
+Depth verisi geldiği anda sistem çalışmaya hazır.
+
+─────────────────────────────────────────────────────────────────────────────
+SORU
+─────────────────────────────────────────────────────────────────────────────
+
+Gazebo simülasyonunda /depth/image ve /points topic'lerinin geçerli veri
+üretmesi için URDF/xacro kamera tanımında nasıl bir değişiklik yapılmalıdır?
+
+Saygılarımla

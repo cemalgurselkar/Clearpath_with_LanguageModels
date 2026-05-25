@@ -1,0 +1,6 @@
+log/
+install/
+build/
+.vscode/
+.venv/
+runs/

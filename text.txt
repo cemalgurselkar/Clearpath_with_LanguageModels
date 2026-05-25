@@ -1,0 +1,1 @@
+Dur. Şimdi karşılaştığımız sorunları sıralayalım bir. gripper küçük geldi coke can için. ana sorun bu. 1. Çözüm önerimiz beer koymak, ama burada mesh dosyaları olmadığı için nesne siyah silindir olarak geliyor ve tekrar etiketleme ve eğitme işlemi geliyor. bunu yapabilirim ama başka çözümlerde denedim. 
