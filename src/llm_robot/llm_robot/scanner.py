@@ -52,13 +52,11 @@ class ScannerNode(Node):
         self.target     = None
         self.scan_angle = 0.0
         self.scan_dir   = 1
-        self.detections = []  # JSON list
+        self.detections = []
 
-        # Publishers
         self.arm_pub    = self.create_publisher(JointTrajectory, ARM_TOPIC, 10)
         self.status_pub = self.create_publisher(String, STATUS_TOPIC, 10)
 
-        # Subscribers
         self.create_subscription(String, LLM_TASK_TOPIC, self._llm_cb, 10)
         self.create_subscription(String, DETECTION_TOPIC, self._detection_cb, 10)
 
@@ -67,7 +65,6 @@ class ScannerNode(Node):
         self.get_logger().info("Scanner hazır → IDLE")
         self.get_logger().info(f"Hedef bekleniyor: {LLM_TASK_TOPIC}")
 
-    # ── Callbacks ─────────────────────────────
     def _llm_cb(self, msg):
         self.target     = msg.data.strip()
         self.state      = State.SCANNING
@@ -83,7 +80,6 @@ class ScannerNode(Node):
             self.get_logger().error(f"Detection parse error: {e}")
             self.detections = []
 
-    # ── Ana döngü ─────────────────────────────
     def _loop(self):
         if self.state == State.IDLE:
             return
@@ -93,7 +89,6 @@ class ScannerNode(Node):
             self._lock()
             self._publish_status("ARRIVED")
 
-    # ── SCAN ──────────────────────────────────
     def _scan(self):
         self.scan_angle += self.scan_dir * SCAN_STEP
         if self.scan_angle >= SCAN_MAX:
@@ -112,7 +107,6 @@ class ScannerNode(Node):
             self.state = State.FOUND
             self._publish_status(f"FOUND:{self.target}")
 
-    # ── LOCK ──────────────────────────────────
     def _lock(self):
         lock_joints = HOME_JOINTS.copy()
         lock_joints[0] = self.scan_angle
@@ -121,7 +115,6 @@ class ScannerNode(Node):
         self.get_logger().info(f"[LOCK] Arm kilitlendi. Açı: {self.scan_angle:.2f} rad")
         self._publish_status("LOCKED")
 
-    # ── Yardımcılar ───────────────────────────
     def _find_target(self):
         if not self.target:
             return False

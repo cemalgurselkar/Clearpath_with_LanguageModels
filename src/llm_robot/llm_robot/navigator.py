@@ -47,16 +47,14 @@ class NavigatorNode(Node):
         self.bridge      = CvBridge()
         self.state       = State.IDLE
         self.target      = None
-        self.detections  = []   # JSON list
+        self.detections  = []
         self.depth_frame = None
         self.miss_count  = 0
         self.MISS_LIMIT  = 5
 
-        # Publishers
         self.vel_pub    = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
         self.status_pub = self.create_publisher(String, STATUS_TOPIC, 10)
 
-        # Subscribers
         self.create_subscription(String, SCANNER_STATUS_TOPIC, self._scanner_cb, 10)
         self.create_subscription(String, DETECTION_TOPIC, self._detection_cb, 10)
         self.create_subscription(Image, DEPTH_TOPIC, self._depth_cb, 10)
@@ -66,7 +64,6 @@ class NavigatorNode(Node):
 
         self.get_logger().info("Navigator hazır → IDLE")
 
-    # ── Callbacks ─────────────────────────────
     def _scanner_cb(self, msg):
         status = msg.data.strip()
 
@@ -100,7 +97,6 @@ class NavigatorNode(Node):
         # SLAM entegrasyonunda kullanılacak
         pass
 
-    # ── Ana döngü ─────────────────────────────
     def _loop(self):
         if self.state == State.IDLE:
             return
@@ -109,7 +105,7 @@ class NavigatorNode(Node):
         elif self.state == State.ARRIVED:
             self._publish_status("ARRIVED")
 
-    # ── NAVIGATE ──────────────────────────────
+
     def _navigate(self):
         target_det = self._find_target()
 
@@ -152,14 +148,13 @@ class NavigatorNode(Node):
 
         self.vel_pub.publish(twist)
 
-    # ── Yardımcılar ───────────────────────────
+
     def _find_target(self):
         """JSON detection listesinden hedef nesneyi bul."""
         if not self.detections:
             return None
 
         if not self.target:
-            # Hedef yoksa en yüksek conf'luyı al
             return max(self.detections, key=lambda d: d.get("conf", 0))
 
         for det in self.detections:

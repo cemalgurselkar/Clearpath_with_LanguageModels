@@ -29,13 +29,8 @@ import json
 from datetime import datetime
 
 
-# ══════════════════════════════════════════════════════════════════
-# CONFIG
-# ══════════════════════════════════════════════════════════════════
-
 class Config:
 
-    # Topics
     NAVIGATOR_TOPIC = "/navigator/status"
     DETECTION_TOPIC = "/detection"
     DEPTH_TOPIC     = "/a200_0000/sensors/camera_0/depth/image"
@@ -56,36 +51,27 @@ class Config:
         "arm_0_wrist_3_joint",        # [5]
     ]
 
-    # Pozisyonlar
     HOME_JOINTS  = [0.0, -1.57, 0.0, -2.0, -1.57, 0.0]
     REACH_JOINTS = [0.0, -1.32, 0.33, -2.0, -1.57, 0.0]
 
-    # Görüntü merkezi
     IMAGE_CX = 320
     IMAGE_CY = 240
 
-    # Toleranslar
-    BEND_TOL        = 0.05   # rad — joint hedefe ulaşma
-    ALIGN_TOL       = 20     # px  — piksel hizalama
 
-    # Hibrit kontrol parametreleri
-    OPEN_LOOP_DEPTH = 0.30   # m — bu mesafede open-loop'a geç
-    OPEN_LOOP_STEPS = 15     # open-loop'ta kaç adım atılacak
+    BEND_TOL        = 0.05
+    ALIGN_TOL       = 20
+
+    OPEN_LOOP_DEPTH = 0.30
+    OPEN_LOOP_STEPS = 15
 
     # KP parametreleri
-    KP_PAN   = 0.001  # shoulder_pan adım katsayısı (err_x)
-    KP_WRIST = 0.003  # wrist_1 adım katsayısı (err_y)
-    KP_LIFT  = 0.05   # shoulder_lift adım büyüklüğü
+    KP_PAN   = 0.001
+    KP_WRIST = 0.003
+    KP_LIFT  = 0.05
 
-    # Gripper
     GRIPPER_OPEN   = 0.0
     GRIPPER_CLOSE  = 0.8
     GRIPPER_EFFORT = 50.0
-
-
-# ══════════════════════════════════════════════════════════════════
-# STATES
-# ══════════════════════════════════════════════════════════════════
 
 class State:
     IDLE     = "IDLE"
@@ -96,10 +82,6 @@ class State:
     LIFTING  = "LIFTING"
     PICKED   = "PICKED"
 
-
-# ══════════════════════════════════════════════════════════════════
-# LOGGER
-# ══════════════════════════════════════════════════════════════════
 
 class FileLogger:
     def __init__(self, path: str):
@@ -112,10 +94,6 @@ class FileLogger:
         with open(self.path, "a") as f:
             f.write(f"[{ts}] {msg}\n")
 
-
-# ══════════════════════════════════════════════════════════════════
-# ARM MATH — stateless yardımcı fonksiyonlar
-# ══════════════════════════════════════════════════════════════════
 
 class ArmMath:
 
@@ -152,10 +130,6 @@ class ArmMath:
         valid = region[np.isfinite(region) & (region > 0)]
         return float(np.median(valid)) if len(valid) else None
 
-
-# ══════════════════════════════════════════════════════════════════
-# STATE HANDLERS
-# ══════════════════════════════════════════════════════════════════
 
 class StateHandler:
     def __init__(self, node: "ArmControllerNode"):
@@ -219,9 +193,7 @@ class PushingHandler(StateHandler):
     """
 
     def execute(self):
-        # ── Open-loop modu aktifse depth'e bakma ──────────────────
         if self.node.open_loop_steps > 0:
-            # Önceki adım tamamlandıysa yeni adım at
             if self.node.push_target is None or ArmMath.joints_reached(
                 self.node.joint_positions, self.node.push_target, Config.BEND_TOL
             ):
@@ -232,7 +204,6 @@ class PushingHandler(StateHandler):
                 )
 
                 if self.node.open_loop_steps == 0:
-                    # Tüm adımlar tamamlandı → GRIPPING
                     self.node.flog.log("OPEN-LOOP done → GRIPPING")
                     self.node.transition(State.GRIPPING)
                     self.node.start_grip_sequence()
@@ -244,7 +215,6 @@ class PushingHandler(StateHandler):
                 self.node.send_arm(joints, sec=1)
             return
 
-        # ── Closed-loop modu ──────────────────────────────────────
         det = ArmMath.best_detection(self.node.detections)
         if det is None:
             return
@@ -252,7 +222,6 @@ class PushingHandler(StateHandler):
         cx, cy = int(det["cx"]), int(det["cy"])
         depth  = ArmMath.depth_at(self.node.depth_frame, cx, cy)
 
-        # Depth NaN veya eşik altı → open-loop'a geç
         if depth is None or depth <= Config.OPEN_LOOP_DEPTH:
             self.node.open_loop_steps = Config.OPEN_LOOP_STEPS
             self.node.push_target     = None
@@ -266,24 +235,16 @@ class PushingHandler(StateHandler):
         self.node.flog.log(f"PUSHING depth={depth:.3f}m  lift={self.node.joint_positions[1]:.3f}")
         self.node.get_logger().info(f"PUSHING depth={depth:.3f}m")
 
-        # Önceki adım tamamlanmadan yeni komut gönderme
         if self.node.push_target is not None:
             if not ArmMath.joints_reached(
-                self.node.joint_positions, self.node.push_target, Config.BEND_TOL
-            ):
+                self.node.joint_positions, self.node.push_target, Config.BEND_TOL):
                 return
 
-        # Yeni closed-loop adımı
         joints    = self.node.joint_positions.copy()
         joints[1] += Config.KP_LIFT
         self.node.push_target = joints[:]
         self.node.send_arm(joints, sec=1)
         self.node.flog.log(f"PUSH step → lift={joints[1]:.3f}")
-
-
-# ══════════════════════════════════════════════════════════════════
-# NODE
-# ══════════════════════════════════════════════════════════════════
 
 class ArmControllerNode(Node):
 
@@ -296,26 +257,22 @@ class ArmControllerNode(Node):
         self.depth_frame     = None
         self.joint_positions = Config.HOME_JOINTS.copy()
         self.push_target     = None
-        self.open_loop_steps = 0   # open-loop kalan adım sayısı
+        self.open_loop_steps = 0
 
-        # Utils
         self.bridge = CvBridge()
         self.flog   = FileLogger(Config.LOG_PATH)
 
-        # Handlers
         self._handlers = {
             State.BENDING:  BendingHandler(self),
             State.ALIGNING: AligningHandler(self),
             State.PUSHING:  PushingHandler(self),
         }
 
-        # Publishers
         self.arm_pub        = self.create_publisher(JointTrajectory, Config.ARM_TOPIC, 10)
         self.status_pub     = self.create_publisher(String, Config.STATUS_TOPIC, 10)
         self.freeze_pub     = self.create_publisher(String, Config.FREEZE_TOPIC, 10)
         self.gripper_client = ActionClient(self, GripperCommand, Config.GRIPPER_ACTION)
 
-        # Subscribers
         self.create_subscription(String,     Config.NAVIGATOR_TOPIC, self._on_navigator, 10)
         self.create_subscription(String,     Config.DETECTION_TOPIC, self._on_detection, 10)
         self.create_subscription(Image,      Config.DEPTH_TOPIC,     self._on_depth,     10)
@@ -324,8 +281,6 @@ class ArmControllerNode(Node):
         self.create_timer(0.2, self._loop)
         self.flog.log("ArmController ready → IDLE")
         self.get_logger().info(f"ArmController ready | log: {Config.LOG_PATH}")
-
-    # ── Subscribers ───────────────────────────────────────────────
 
     def _on_navigator(self, msg: String):
         if msg.data == "ARRIVED" and self.state == State.IDLE:
@@ -348,14 +303,10 @@ class ArmControllerNode(Node):
         joint_map            = dict(zip(msg.name, msg.position))
         self.joint_positions = [joint_map.get(j, 0.0) for j in Config.JOINT_NAMES]
 
-    # ── Main Loop ─────────────────────────────────────────────────
-
     def _loop(self):
         handler = self._handlers.get(self.state)
         if handler:
             handler.execute()
-
-    # ── Grip Sequence ─────────────────────────────────────────────
 
     def start_grip_sequence(self):
         self.set_gripper(Config.GRIPPER_CLOSE)
@@ -378,8 +329,6 @@ class ArmControllerNode(Node):
         self.freeze_pub.publish(String(data="False"))
         self.flog.log("PICKED — mission complete")
 
-    # ── Helpers ───────────────────────────────────────────────────
-
     def transition(self, new_state: str):
         self.flog.log(f"{self.state} → {new_state}")
         self.get_logger().info(f"{self.state} → {new_state}")
@@ -399,11 +348,6 @@ class ArmControllerNode(Node):
         msg      = String()
         msg.data = status
         self.status_pub.publish(msg)
-
-
-# ══════════════════════════════════════════════════════════════════
-# ENTRY
-# ══════════════════════════════════════════════════════════════════
 
 def main():
     rclpy.init()

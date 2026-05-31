@@ -19,7 +19,6 @@ set_home_position = TimerAction(
     ]
 )
 
-# Nodelar 10 saniye sonra başlasın (simülasyon + home pozisyon tamamlansın)
 camera_node = TimerAction(
     period=10.0,
     actions=[Node(

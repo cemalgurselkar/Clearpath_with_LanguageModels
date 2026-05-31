@@ -14,9 +14,6 @@ from ultralytics import YOLO
 import cv2
 import json
 
-
-# ── Config ─────────────────────────────────────────────────────────────────────
-
 class Config:
     CAMERA_TOPIC    = "/camera_view"
     DETECTION_TOPIC = "/detection"
@@ -24,9 +21,6 @@ class Config:
     MODEL_PATH      = "/home/cemal/ros2_ws/src/llm_robot/llm_robot/best.pt"
     CONF_THRESHOLD  = 0.2
     DISPLAY_HZ      = 0.033
-
-
-# ── DetectionHelper ────────────────────────────────────────────────────────────
 
 class DetectionHelper:
 
@@ -60,8 +54,6 @@ class DetectionHelper:
         return frame
 
 
-# ── Node ───────────────────────────────────────────────────────────────────────
-
 class DetectorNode(Node):
 
     def __init__(self):
@@ -83,8 +75,6 @@ class DetectorNode(Node):
 
         self.create_timer(Config.DISPLAY_HZ, self._display)
 
-    # ── Callbacks ──────────────────────────────────────────────────────────────
-
     def _on_image(self, msg):
         try:
             self.color_frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -95,8 +85,6 @@ class DetectorNode(Node):
     def _on_freeze(self, msg):
         self.frozen = msg.data == "True"
         self.get_logger().info(f"Freeze: {self.frozen}")
-
-    # ── Detection ──────────────────────────────────────────────────────────────
 
     def _detect(self):
         if self.color_frame is None:
@@ -115,8 +103,6 @@ class DetectorNode(Node):
         self.frozen_msg = out
         self.detection_pub.publish(out)
 
-    # ── Display ────────────────────────────────────────────────────────────────
-
     def _display(self):
         if self.color_frame is None:
             return
@@ -127,9 +113,6 @@ class DetectorNode(Node):
         if cv2.waitKey(1) & 0xFF == ord("q"):
             cv2.destroyAllWindows()
             rclpy.shutdown()
-
-
-# ── Entry ──────────────────────────────────────────────────────────────────────
 
 def main():
     rclpy.init()
@@ -142,7 +125,6 @@ def main():
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

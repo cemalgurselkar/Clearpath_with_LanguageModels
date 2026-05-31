@@ -2,7 +2,7 @@
 """
 llm_interface.py - LLM Interface Node
 - Takes English command from terminal
-- Sends to Ollama qwen3:4b
+- Sends to Ollama llama3.2:2b
 - Parses JSON response
 - Publishes object name to /llm_task topic
 """
