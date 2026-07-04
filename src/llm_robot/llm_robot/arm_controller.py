@@ -55,7 +55,6 @@ class Config:
     FREEZE_TOPIC    = "/detector/freeze"
     LOG_PATH        = "/tmp/arm_controller.log"
 
-    # Joint names — sıra önemli
     JOINT_NAMES = [
         "arm_0_shoulder_pan_joint",   # [0] yatay döndürme (cx kontrol)
         "arm_0_shoulder_lift_joint",  # [1] omuz (iniş)
@@ -65,33 +64,26 @@ class Config:
         "arm_0_wrist_3_joint",        # [5] sabit
     ]
 
-    # ── KALİBRE EDİLMİŞ POZLAR ──────────────────────────────────
     HOME_JOINTS  = [0.0,  -1.57,  0.65,  -1.57,  -1.57, 0.0]
-    REACH_JOINTS = [0.05, -0.83,  0.861, -1.75,  -1.57, 0.0]   # üst/top-down poz
-    GRASP_JOINTS = [0.05, -0.638, 0.958, -1.899, -1.57, 0.0]   # kavrama hizası
-    # NOT: DESCENDING'de GRASP'ın pan'i (idx 0) KULLANILMAZ;
-    #      o an ALIGNING'den gelen pan korunur. Diğerleri GRASP'tan alınır.
+    REACH_JOINTS = [0.05, -0.83,  0.861, -1.75,  -1.57, 0.0]
+    GRASP_JOINTS = [0.05, -0.638, 0.958, -1.899, -1.57, 0.0]
 
-    # ── HİZALAMA HEDEFİ ─────────────────────────────────────────
-    TARGET_CX = 321   # yatay: tam merkez
-    TARGET_CY = 145   # dikey: küpü yukarıda tutar (gripper önde olduğu için)
+    TARGET_CX = 321
+    TARGET_CY = 145
 
     BEND_TOL          = 0.05
-    ALIGN_TOL         = 8       # piksel
-    ALIGN_OK_REQUIRED = 3       # arka arkaya temiz ölçüm şartı
-    SETTLE_SEC        = 2.0     # REACH sonrası titreşim sönme beklemesi
+    ALIGN_TOL         = 8
+    ALIGN_OK_REQUIRED = 3
+    SETTLE_SEC        = 2.0
 
-    # Hizalama kazançları (look-then-move; top-down için ölçekli)
     KP_PAN   = 0.0008
     KP_WRIST = 0.0015
 
-    ALIGN_SEC   = 2     # her hizalama adımı trajectory süresi
-    DESCEND_SEC = 4     # dik iniş trajectory süresi (yumuşak)
-    DESCEND_TOL = 0.02  # GRASP'a ulaşma toleransı (rad).
-    # 0.08 fazla gevşekti: kol küpe ~birkaç cm varmadan "ulaşıldı" sayıp
-    # gripper'ı erken kapatıyordu. 0.02 ile kol GRASP'a gerçekten oturunca
-    # kapanır. use_sim_time sayesinde sıkı tolerans artık timeout yaratmaz.
-    DESCEND_TIMEOUT = 20.0  # sim saniyesi; iniş takılırsa güvenlik (use_sim_time)
+    ALIGN_SEC   = 2
+    DESCEND_SEC = 4
+    DESCEND_TOL = 0.02
+
+    DESCEND_TIMEOUT = 20.0
 
     GRIPPER_OPEN   = 0.0
     GRIPPER_CLOSE  = 0.8
@@ -164,7 +156,6 @@ class BendingHandler(StateHandler):
         ):
             return
 
-        # REACH'e ulaşıldı. Henüz bekleme başlamadıysa başlat.
         if not self.node.settling:
             self.node.set_gripper(Config.GRIPPER_OPEN)
             self.node.settling = True
@@ -185,7 +176,6 @@ class AligningHandler(StateHandler):
     """
 
     def execute(self):
-        # Önceki hizalama komutu hâlâ uygulanıyorsa bekle
         if self.node.align_target is not None:
             if not ArmMath.joints_reached(
                 self.node.joint_positions, self.node.align_target, Config.BEND_TOL
@@ -207,7 +197,6 @@ class AligningHandler(StateHandler):
         )
         self.node.get_logger().info(f"ALIGNING err_x={err_x} err_y={err_y}")
 
-        # Debounce: arka arkaya temiz ölçüm
         if abs(err_x) < Config.ALIGN_TOL and abs(err_y) < Config.ALIGN_TOL:
             self.node.align_ok_count += 1
             if self.node.align_ok_count >= Config.ALIGN_OK_REQUIRED:
@@ -218,10 +207,9 @@ class AligningHandler(StateHandler):
         else:
             self.node.align_ok_count = 0
 
-        # Düzeltme komutu (eksen eşlemesi ölçümle doğrulandı)
         joints     = self.node.joint_positions.copy()
-        joints[0] -= Config.KP_PAN   * err_x   # shoulder_pan  → yatay
-        joints[3] += Config.KP_WRIST * err_y   # wrist_1       → dikey
+        joints[0] -= Config.KP_PAN   * err_x
+        joints[3] += Config.KP_WRIST * err_y
         self.node.align_target = joints[:]
         self.node.send_arm(joints, sec=Config.ALIGN_SEC)
 
@@ -243,7 +231,6 @@ class DescendingHandler(StateHandler):
         reached = ArmMath.joints_reached(
             self.node.joint_positions, target, Config.DESCEND_TOL
         )
-        # Sim-time uyumlu süre ölçümü (RTF düşük olsa bile doğru)
         elapsed = (self.node.get_clock().now() - self.node.descent_start).nanoseconds / 1e9
 
         if reached:
@@ -256,7 +243,6 @@ class DescendingHandler(StateHandler):
             return
 
         if elapsed >= Config.DESCEND_TIMEOUT:
-            # Hangi eklem(ler) hedefe ulaşamadı, farkları yaz
             diffs = [
                 f"{Config.JOINT_NAMES[i].replace('arm_0_','').replace('_joint','')}="
                 f"{self.node.joint_positions[i] - target[i]:+.3f}"
@@ -276,27 +262,19 @@ class ArmControllerNode(Node):
     def __init__(self):
         super().__init__("arm_controller")
 
-        # Simülasyon saatini kullan: RTF düşük olduğunda (sim gerçek zamandan
-        # yavaş) tüm zamanlayıcılar ve süre ölçümleri sim saatine göre çalışır.
-        # Aksi halde gerçek-zaman timeout'ları kol daha inerken dolup
-        # erken kavramaya yol açıyordu.
         self.set_parameters([rclpy.parameter.Parameter(
             'use_sim_time', rclpy.Parameter.Type.BOOL, True)])
 
-        # State
         self.state           = State.IDLE
         self.detections      = []
         self.joint_positions = Config.HOME_JOINTS.copy()
 
-        # BENDING settle
         self.settling      = False
         self._settle_timer = None
 
-        # ALIGNING dur-ölç + debounce
         self.align_target   = None
         self.align_ok_count = 0
 
-        # DESCENDING izleme
         self.descent_target = None
         self.descent_start  = None
 
@@ -321,7 +299,6 @@ class ArmControllerNode(Node):
         self.flog.log("ArmController ready → IDLE")
         self.get_logger().info(f"ArmController ready | log: {Config.LOG_PATH}")
 
-    # ── Aboneler ────────────────────────────────────────────────
     def _on_navigator(self, msg: String):
         if msg.data == "ARRIVED" and self.state == State.IDLE:
             self.send_arm(Config.REACH_JOINTS, sec=3)
@@ -337,13 +314,11 @@ class ArmControllerNode(Node):
         joint_map            = dict(zip(msg.name, msg.position))
         self.joint_positions = [joint_map.get(j, 0.0) for j in Config.JOINT_NAMES]
 
-    # ── Ana döngü ───────────────────────────────────────────────
     def _loop(self):
         handler = self._handlers.get(self.state)
         if handler:
             handler.execute()
 
-    # ── BENDING settle tamamlandı ───────────────────────────────
     def _on_settle_done(self):
         if self._settle_timer:
             self._settle_timer.cancel()
@@ -352,7 +327,6 @@ class ArmControllerNode(Node):
             self.flog.log("Settle bitti → ALIGNING")
             self.transition(State.ALIGNING)
 
-    # ── DESCENDING: dik iniş (interpolasyon) ────────────────────
     def start_descent(self):
         """
         GRASP pozuna in, ama pan'i ALIGNING'den geldiği gibi koru.
@@ -364,13 +338,12 @@ class ArmControllerNode(Node):
         self.freeze_pub.publish(String(data="True"))
 
         target    = list(Config.GRASP_JOINTS)
-        target[0] = self.joint_positions[0]   # pan korunur (yatay hizalama)
+        target[0] = self.joint_positions[0]
         self.descent_target = target
         self.descent_start  = self.get_clock().now()
         self.send_arm(target, sec=Config.DESCEND_SEC)
         self.flog.log(f"DESCENDING → {['%.3f' % p for p in target]}")
 
-    # ── GRIPPING → LIFTING → PICKED ─────────────────────────────
     def start_grip_sequence(self):
         self.set_gripper(Config.GRIPPER_CLOSE)
         self.flog.log("GRIPPING: gripper kapatılıyor")
@@ -393,7 +366,6 @@ class ArmControllerNode(Node):
         self.freeze_pub.publish(String(data="False"))
         self.flog.log("PICKED — mission complete")
 
-    # ── Yardımcılar ─────────────────────────────────────────────
     def transition(self, new_state: str):
         self.flog.log(f"{self.state} → {new_state}")
         self.get_logger().info(f"{self.state} → {new_state}")
