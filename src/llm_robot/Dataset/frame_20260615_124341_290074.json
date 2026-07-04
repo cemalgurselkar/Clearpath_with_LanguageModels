@@ -1,0 +1,28 @@
+{
+  "version": "6.2.0",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "box",
+      "points": [
+        [
+          324.13153456998316,
+          235.61551433389545
+        ],
+        [
+          356.5092748735245,
+          276.424957841484
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "shape_type": "rectangle",
+      "flags": {},
+      "mask": null
+    }
+  ],
+  "imagePath": "frame_20260615_124341_290074.jpg",
+  "imageData": null,
+  "imageHeight": 480,
+  "imageWidth": 640
+}

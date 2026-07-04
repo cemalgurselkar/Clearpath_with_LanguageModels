@@ -1,95 +1,27 @@
-Konu: LLM Tabanlı Mobil Manipülasyon Robotu – Kavrama Modülü Durum Raporu
 
-Merhaba Hocam,
+Kol küpün yakınına kadar geliyor ama **gripper parmakları küpü tam arasına alamıyor**; kavrama her seferinde birkaç santim kaçıyor. Hizalama logları artık çok iyi görünüyor (err_x=7, err_y=4 piksel ile geçiş yapıyor), buna rağmen son kör yaklaşma fazında gripper küpün yanına/önüne iniyor ve boşluğu kavrıyor.
 
-Aşağıda arm_controller modülünde denenen yöntemleri, karşılaşılan sorunları ve
-mevcut durumu "sebep – geçici çözüm – kalıcı adım" formatında özetledim.
+Denediğim Çözümler
 
-─────────────────────────────────────────────────────────────────────────────
-GENEL DURUM
-─────────────────────────────────────────────────────────────────────────────
+1. Hizalama toleransını sıkılaştırma + debounce
+Tolerans 20 pikselden 8 piksele indirildi. Ayrıca tek bir anlık ölçümle geçiş yapmak yerine, arka arkaya 3 temiz ölçüm şartı (debounce) eklendi. Kol hareket halindeyken ölçüm alınmaması için "dur-ölç" mantığı eklendi: önceki hizalama komutu tamamlanmadan yeni ölçüm yapılmıyor.
+Sonuç: Hizalama kalitesi belirgin iyileşti (err_x -18'de takılı kalma sorunu çözüldü), ama kavrama sorunu devam etti.*
 
-Uçtan uca pipeline aktif ve çalışıyor:
-  LLM → Scanner → Navigator → Arm Controller
+2. Hedef piksel kalibrasyonu
+Kamera bileğe (wrist_3) monteli olduğu için kameranın optik merkezi ile gripper ekseni aynı değil. Bunu doğrulamak için küpü Gazebo'da gripper parmaklarının tam arasına yerleştirip iki mesafeden tespit değerini okuduk:
+- Uzak (REACH pozisyonu): cx=320, cy=281
+- Yakın (~0.30 m): cx=319, cy=137
 
-Robot nesneye 0.67m mesafede duruyor (ARRIVED), kol REACH_JOINTS pozisyonuna
-geliyor, gripper açılıyor. Sorun bu noktadan sonra nesneye ulaşma aşamasında.
+Eski koddaki hedef (320, 240) yanlıştı; hedefi kalibre edilmiş değere (320, 281) çektik. Küpün yaklaşma sırasında görüntüde yukarı kayması (281 → 137) doğal paralaks olduğu için pushing sırasında düzeltme yapılmıyor.
+Sonuç: Hizalama doğru noktaya yapılıyor artık, ama kavrama yine kaçıyor.*
 
-─────────────────────────────────────────────────────────────────────────────
-DENENEN YÖNTEM 1 — Visual Servoing (Depth Image)
-─────────────────────────────────────────────────────────────────────────────
+3. Tespit dondurma (freeze) zamanlamasının değiştirilmesi
+Eskiden tespit ALIGNING biter bitmez donduruluyordu; bu yüzden depth okuması, küpün artık orada olmadığı eski piksele bakıyordu. Freeze, open-loop'a geçiş anına taşındı — böylece depth son ana kadar küpü takip eden canlı pikselden okunuyor.
+Sonuç: Depth okumaları tutarlı hale geldi, kavrama sorunu devam etti.*
 
-Sebep      : /detection topic'inden gelen cx, cy piksel koordinatları ve
-             /depth/image topic'inden alınan derinlik değeri kullanılarak
-             shoulder_lift + wrist_1 eklemleri visual servoing ile kontrol
-             edildi. Nesneye yaklaştıkça derinlik azalacak, threshold'a
-             ulaşınca gripper kapanacaktı.
+4. Depth'e bağlı dinamik hedef (denendi, vazgeçildi)
+Hedef cy'yi depth'e göre interpolasyonla kaydıran bir yöntem denendi. Ancak 0.3 m altında depth verisi olmadığı için bu yaklaşımın kör fazda karşılığı yok; mevcut hibrit yapıyı korumak adına vazgeçildi.
 
-Sonuç      : Çalışmadı. /depth/image topic'indeki tüm değerler NaN (0x7F800000)
-             dönüyor. Gazebo simülasyonunda RealSense D435 eklentisi geçerli
-             depth verisi üretemiyor. Yakın mesafede (<0.4m) kamera tamamen
-             körleşiyor.
-
-─────────────────────────────────────────────────────────────────────────────
-DENENEN YÖNTEM 2 — TF + PointCloud2 + 2-Joint IK
-─────────────────────────────────────────────────────────────────────────────
-
-Sebep      : Depth image NaN olduğu için alternatif olarak PointCloud2 verisi
-             denendi. Plan şuydu:
-             1. /points topic'inden cx,cy pikselindeki 3D koordinatı al
-             2. tf2 ile camera_0_color_optical_frame → arm_0_base_link
-                dönüşümü yap
-             3. Sadece shoulder_lift + wrist_1 için analitik IK hesapla
-             4. Arm'ı tek komutla hedefe gönder
-
-             TF namespace sorunu çözüldü:
-             - arm_controller node'u /a200_0000 namespace'ine taşındı
-             - topic remap: /tf → /a200_0000/tf, /tf_static → /a200_0000/tf_static
-             - arm_0_base_link → camera_0_color_optical_frame dönüşümü
-               doğrulandı: Translation [0.487, 0.168, 0.868]
-
-Sonuç      : Çalışmadı. /a200_0000/sensors/camera_0/points topic'i de NaN
-             dönüyor. PointCloud2 verisi depth image ile aynı kaynaktan
-             üretildiği için sorun devam ediyor.
-
-─────────────────────────────────────────────────────────────────────────────
-TEMEL SORUN — Gazebo Kamera Eklentisi
-─────────────────────────────────────────────────────────────────────────────
-
-Sebep      : Gazebo simülasyonunda kullanılan kamera eklentisi geçerli depth
-             verisi üretemiyor. /depth/image ve /points topic'lerindeki tüm
-             piksel değerleri IEEE 754 NaN formatında geliyor.
-             Color image (/color/image) çalışıyor, YOLO detection aktif.
-             Sorun sadece depth/3D veri üretiminde.
-
-Geçici çözüm: Şu an color image üzerinden YOLO ile cx,cy alınıyor, arm
-              REACH_JOINTS pozisyonuna geliyor ve ALIGNING aşamasında
-              wrist_1 ile dikey hizalama yapılıyor. Ancak 3D konum
-              bilinmediği için arm nesneye ulaşamıyor.
-
-Kalıcı adım : Gazebo'da depth kamera eklentisinin düzgün çalışması için
-              URDF/xacro dosyasındaki kamera tanımının güncellenmesi gerekiyor.
-              Hangi eklentinin (libgazebo_ros_camera, libgazebo_ros_depth_camera,
-              openni_kinect) kullanılması gerektiği konusunda yönlendirme
-              bekliyoruz.
-
-─────────────────────────────────────────────────────────────────────────────
-MEVCUT KOD MİMARİSİ
-─────────────────────────────────────────────────────────────────────────────
-
-arm_controller.py şu anda TF + IK altyapısı hazır:
-  - tf2_ros Buffer + TransformListener aktif
-  - ArmHelper.point_from_cloud() → piksel → 3D nokta
-  - ArmHelper.transform_point()  → kamera frame → arm frame
-  - ArmHelper.ik_2joint()        → shoulder_lift + wrist_1 IK
-
-Depth verisi geldiği anda sistem çalışmaya hazır.
-
-─────────────────────────────────────────────────────────────────────────────
-SORU
-─────────────────────────────────────────────────────────────────────────────
-
-Gazebo simülasyonunda /depth/image ve /points topic'lerinin geçerli veri
-üretmesi için URDF/xacro kamera tanımında nasıl bir değişiklik yapılmalıdır?
-
-Saygılarımla
+5. Open-loop adım sayısını artırma
+Kör fazdaki adım sayısı 50'den 125'e çıkarıldı.
+Sonuç: Hiçbir etkisi olmadı — kol aynı yerde duruyor.

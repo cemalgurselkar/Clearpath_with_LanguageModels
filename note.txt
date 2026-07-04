@@ -1,0 +1,33 @@
+ARM CONTROLLER — KAVRAMA NOTU
+
+Robot küpün önüne gelince kolun çalışma sırası:
+
+- Kol önce REACH pozuna gider: gripper küpün üstünde, tepeden bakar.
+- Kamera ile küp ortalanır: yatay hata için taban eklemi (pan), dikey
+  hata için bilek eklemi (wrist_1) kullanılır. Kol her düzeltmede durur,
+  ölçer, tekrar düzeltir (hareket halindeyken ölçüm bozuluyordu).
+- Ortalama bitince kol kavrama (GRASP) pozuna iner, gripper kapanır,
+  küpü kaldırır.
+
+İki poz (REACH + GRASP) neden var:
+Küpü bir kez manuel kavrayarak hem üst poz hem kavrama pozunun eklem
+açılarını ölçtüm. İniş, bu iki poz arası interpolasyonla yapılıyor.
+Tek eklemle inince kol yay çizip küpü kaçırıyordu; iki poz arası birden
+fazla eklem birlikte hareket edince iniş düz oluyor.
+
+Yaşanan ve çözülen sorunlar:
+- Robot küpü tam ortalayamıyordu. Sebep: hizalama hedefi yanlıştı ve kol
+  hareket halindeyken ölçüm alınıyordu. Hedef pikseli kalibre edip
+  "dur-ölç" mantığına geçince düzeldi.
+- Gripper küpe varmadan kapanıyordu (iniş bitmeden). Bekleme süresini
+  inişe göre ayarlayınca düzeldi.
+
+Kısıtlar:
+- Derinlik kamerası 0.3 m altını görmüyor, kavrama bu mesafenin altında.
+  Bu yüzden son iniş açık döngü (kör) yapmak zorunda — tercih değil, sensör
+  kısıtı. MoveIt2 / hazır IK de projede yok.
+
+Eksik / gelecek:
+- İniş sabit masa ve küp boyutuna göre kalibre. Bunlar değişirse kavrama
+  pozu yeniden ölçülmeli. Daha genel çözüm için IK gerekir.
+- Küpü farklı yerlere koyup tekrarlı test (başarı oranı) yapılacak.

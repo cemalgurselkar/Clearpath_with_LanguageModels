@@ -1,0 +1,7 @@
+path: /home/cemal/ros2_ws/src/llm_robot/Dataset/YOLODataset
+train: images/train
+val: images/val
+test:
+
+names:
+    0: box

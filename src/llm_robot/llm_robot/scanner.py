@@ -29,7 +29,7 @@ JOINT_NAMES = [
     "arm_0_wrist_3_joint",
 ]
 
-HOME_JOINTS = [0.0, -1.57, 0.0, -1.57, -1.57, 0.0]
+HOME_JOINTS = [0.0, -1.57, 0.65, -1.57, -1.57, 0.0]
 
 SCAN_MIN    = -3.5
 SCAN_MAX    =  3.5

@@ -27,7 +27,7 @@ CMD_VEL_TOPIC        = "/a200_0000/cmd_vel"
 STATUS_TOPIC         = "/navigator/status"
 
 IMAGE_W   = 640
-STOP_DIST = 0.65
+STOP_DIST = 0.82
 KP_ANG    = 0.003
 KP_LIN    = 0.3
 MAX_ANG   = 0.4
@@ -94,7 +94,7 @@ class NavigatorNode(Node):
             self.get_logger().error(f"Depth error: {e}")
 
     def _odom_cb(self, msg):
-        # SLAM entegrasyonunda kullanılacak
+        # Burası sonraki çalışmada, SLAM entegrasyonu için kullanılacak
         pass
 
     def _loop(self):

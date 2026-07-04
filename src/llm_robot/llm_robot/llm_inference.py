@@ -44,7 +44,6 @@ class LLMInterface(Node):
         self._check_ollama()
         self.get_logger().info("Type a command and press Enter. 'q' to quit.")
 
-        # Terminal input timer
         self.create_timer(0.1, self._input_loop)
         self._waiting_input = True
 
@@ -115,7 +114,6 @@ def main():
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

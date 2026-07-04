@@ -20,7 +20,7 @@ class CameraViewer(Node):
         self.frame_count = 0
         self.color_topic = "/a200_0000/sensors/camera_0/color/image"
         self.publisher_name = "camera_view"
-        self.data_dir = os.path.expanduser("~/ros2_ws/src/llm_robot/data2")
+        self.data_dir = os.path.expanduser("~/ros2_ws/src/llm_robot/Dataset")
         os.makedirs(self.data_dir, exist_ok=True)
 
         self.create_subscription(Image, self.color_topic, self._color_cb, 10)

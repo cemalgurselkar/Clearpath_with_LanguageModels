@@ -13,7 +13,7 @@ set_home_position = TimerAction(
             cmd=['ros2', 'topic', 'pub', '--once',
                 '/a200_0000/arm_0_joint_trajectory_controller/joint_trajectory',
                 'trajectory_msgs/msg/JointTrajectory',
-                '{"joint_names": ["arm_0_shoulder_pan_joint", "arm_0_shoulder_lift_joint", "arm_0_elbow_joint", "arm_0_wrist_1_joint", "arm_0_wrist_2_joint", "arm_0_wrist_3_joint"], "points": [{"positions": [0.0, -1.57, 0.0, -1.57, -1.57, 0.0], "time_from_start": {"sec": 3}}]}'],
+                '{"joint_names": ["arm_0_shoulder_pan_joint", "arm_0_shoulder_lift_joint", "arm_0_elbow_joint", "arm_0_wrist_1_joint", "arm_0_wrist_2_joint", "arm_0_wrist_3_joint"], "points": [{"positions": [0.0, -1.57, 0.55, -1.57, -1.57, 0.0], "time_from_start": {"sec": 3}}]}'],
             output='screen'
         )
     ]
@@ -94,5 +94,5 @@ def generate_launch_description():
         detector_node,
         scanner_node,
         navigator_node,
-        arm_controll_node
+        arm_controll_node,
     ])

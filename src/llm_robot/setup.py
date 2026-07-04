@@ -31,7 +31,7 @@ setup(
         'scanner = llm_robot.scanner:main',
         'navigator = llm_robot.navigator:main',
         'llm_inference = llm_robot.llm_inference:main',
-        'arm_controller = llm_robot.arm_controller:main'
+        'arm_controller = llm_robot.arm_controller:main',
     ],
 },
 )
